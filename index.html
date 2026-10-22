@@ -1,609 +1,1236 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SILENT-RECON — цифровой след и OPSEC при сканировании</title>
-<style>
-  :root{
-    --bg:#0b0e13;
-    --panel:#11161e;
-    --panel-2:#151b24;
-    --border:#1f2937;
-    --text:#d1d9e0;
-    --muted:#8896a6;
-    --dim:#4d5765;
-    --accent:#7ba7c9;
-    --accent-dim:#486a84;
-    --warn:#c9a227;
-    --danger:#c9504a;
-    --mono:'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Menlo,monospace;
-    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{
-    background:var(--bg); color:var(--text); font-family:var(--sans);
-    line-height:1.65; min-height:100vh; overflow-x:hidden;
-    background-image:
-      linear-gradient(rgba(123,167,201,.015) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(123,167,201,.015) 1px,transparent 1px);
-    background-size:48px 48px;
-  }
-  ::selection{background:var(--accent);color:#0b0e13}
-  a{color:var(--accent);text-decoration:none}
-  b{color:#fff;font-weight:600}
-  code{
-    font-family:var(--mono);font-size:.88em;
-    color:var(--accent);background:rgba(123,167,201,.08);
-    padding:1px 6px;border-radius:4px;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  /* ---------- top bar ---------- */
-  .topbar{
-    position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:24px;
-    padding:14px 28px;background:rgba(11,14,19,.9);
-    backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
-  }
-  .logo{font-family:var(--mono);font-size:13px;letter-spacing:2px;color:var(--muted);white-space:nowrap}
-  .logo span{color:var(--text)}
-  .topnav{display:flex;gap:24px;margin-left:auto;font-family:var(--mono);font-size:12.5px}
-  .topnav a{color:var(--muted);transition:color .2s;position:relative;letter-spacing:.3px}
-  .topnav a:hover{color:var(--accent)}
-  .topnav a::after{content:'';position:absolute;left:0;bottom:-4px;height:1px;width:0;background:var(--accent);transition:width .25s}
-  .topnav a:hover::after{width:100%}
-  .status-badge{
-    font-family:var(--mono);font-size:11px;letter-spacing:.8px;padding:5px 12px;
-    border:1px solid var(--border);border-radius:4px;color:var(--muted);
-    background:var(--panel);white-space:nowrap;display:flex;align-items:center;gap:7px;
-  }
-  .status-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:block}
-  .status-badge.banned{border-color:var(--danger);color:var(--danger);background:rgba(201,80,74,.06)}
-  .status-badge.banned .dot{background:var(--danger)}
+  <meta
+    name="description"
+    content="Панель наблюдения за HTTP-запросами и событиями сетевого сенсора."
+  >
 
-  /* ---------- layout ---------- */
-  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
-  section{padding:80px 0;border-bottom:1px solid var(--border)}
-  section:last-of-type{border-bottom:none}
+  <title>SILENT-RECON — мониторинг событий</title>
 
-  .kicker{
-    font-family:var(--mono);font-size:11.5px;letter-spacing:2.5px;color:var(--accent);
-    text-transform:uppercase;margin-bottom:16px;
-  }
-  h1{font-size:clamp(32px,5.2vw,56px);line-height:1.08;letter-spacing:-1.5px;font-weight:700;margin-bottom:24px;color:#fff}
-  h2{font-size:clamp(22px,3vw,32px);letter-spacing:-.8px;margin-bottom:12px;font-weight:600;color:#fff}
-  h2 .num{font-family:var(--mono);color:var(--dim);font-size:.62em;margin-right:12px;letter-spacing:.5px;font-weight:400}
-  .lead{font-size:16px;color:var(--muted);max-width:740px}
-  .lead b{color:var(--text)}
+  <style nonce="__NONCE__">
+    :root {
+      color-scheme: dark;
 
-  /* ---------- hero ---------- */
-  #hero{padding-top:64px}
-  .fp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:36px}
-  .fp-cell{
-    background:var(--panel);border:1px solid var(--border);border-radius:8px;
-    padding:13px 16px;font-family:var(--mono);font-size:12.5px;overflow:hidden;
-  }
-  .fp-cell .k{
-    color:var(--dim);text-transform:uppercase;letter-spacing:.8px;
-    font-size:10.5px;display:block;margin-bottom:6px;
-  }
-  .fp-cell .v{color:var(--accent);word-break:break-all;line-height:1.45}
-  .fp-cell .v.muted{color:var(--muted)}
+      --bg: #090d13;
+      --panel: #111823;
+      --panel-2: #151f2d;
+      --border: #253247;
 
-  /* ---------- log / fail2ban ---------- */
-  .log-layout{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-top:36px}
-  @media(max-width:820px){.log-layout{grid-template-columns:1fr}}
+      --text: #e0e8f2;
+      --muted: #a0aec0;
+      --accent: #8bbde7;
 
-  .log-window{
-    background:#080b10;border:1px solid var(--border);border-radius:10px;overflow:hidden;
-    display:flex;flex-direction:column;min-height:300px;
-  }
-  .log-head{
-    display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);
-    font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.5px;background:var(--panel);
-  }
-  .log-head .lights{display:flex;gap:6px}
-  .log-head .lights i{width:9px;height:9px;border-radius:50%;display:block;background:var(--border)}
-  .log-body{padding:12px 16px;font-family:var(--mono);font-size:12.5px;overflow-y:auto;max-height:320px;flex:1}
-  .log-line{display:flex;gap:10px;padding:2px 0;animation:fadeIn .3s ease}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-  .log-line .t{color:var(--dim);flex-shrink:0}
-  .log-line .ip{color:var(--muted);flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .log-line .path{color:var(--text)}
-  .log-line .st{flex-shrink:0;color:var(--accent)}
-  .log-line .st.warn{color:var(--warn)}
-  .log-line .st.bad{color:var(--danger)}
-  .log-line.honeypot{background:rgba(201,80,74,.06);border-radius:3px;padding-left:6px}
+      --success: #8bd5ad;
+      --warning: #e3c26b;
+      --danger: #ef9292;
 
-  .fb-panel{
-    background:var(--panel);border:1px solid var(--border);border-radius:10px;
-    padding:20px;display:flex;flex-direction:column;
-  }
-  .fb-panel .fb-title{
-    display:flex;justify-content:space-between;align-items:center;
-    font-family:var(--mono);font-size:12.5px;letter-spacing:.5px;
-    color:var(--text);margin-bottom:6px;font-weight:500;
-  }
-  .fb-panel .fb-title .mode{color:var(--dim);font-size:11px}
-  .fb-panel .fb-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:18px}
-  .fb-meter{height:8px;border-radius:4px;background:#080b10;border:1px solid var(--border);overflow:hidden;margin-bottom:10px}
-  .fb-fill{height:100%;width:0;background:var(--accent);transition:width .4s ease, background-color .4s ease}
-  .fb-stats{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:18px}
-  .fb-stats b{color:var(--text);font-weight:500}
-  .fb-legend{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.9;margin-top:auto;border-top:1px dashed var(--border);padding-top:14px}
-  .fb-legend span{color:var(--muted)}
-  .fb-hint{font-size:12px;color:var(--dim);margin-top:16px;font-family:var(--mono)}
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-  /* ---------- cards ---------- */
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:36px}
-  .card{
-    background:var(--panel);border:1px solid var(--border);border-radius:10px;
-    padding:22px;transition:border-color .25s;
-  }
-  .card:hover{border-color:var(--accent-dim)}
-  .card .tag{
-    font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;padding:3px 9px;
-    border-radius:4px;display:inline-block;margin-bottom:14px;
-    border:1px solid var(--border);color:var(--muted);background:transparent;
-  }
-  .tag.passive{color:#8fb4d9;border-color:rgba(143,180,217,.3)}
-  .tag.active{color:var(--warn);border-color:rgba(201,162,39,.3)}
-  .tag.def{color:var(--accent);border-color:var(--accent-dim)}
-  .tag.danger{color:var(--danger);border-color:rgba(201,80,74,.35)}
-  .card h3{font-size:17px;margin-bottom:8px;color:#fff;letter-spacing:-.2px;font-weight:600}
-  .card p{font-size:14px;color:var(--muted)}
-  .card code{font-size:12.5px}
+    * {
+      box-sizing: border-box;
+    }
 
-  /* ---------- opsec list ---------- */
-  .opsec-list{list-style:none;margin-top:32px;display:grid;gap:10px}
-  .opsec-list li{
-    display:flex;gap:16px;padding:18px 22px;background:var(--panel);
-    border:1px solid var(--border);border-left:2px solid var(--accent-dim);
-    border-radius:8px;font-size:14.5px;
-  }
-  .opsec-list .n{font-family:var(--mono);color:var(--dim);font-size:12px;padding-top:2px;min-width:22px}
-  .opsec-list b{color:#fff}
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.6;
+    }
 
-  /* ---------- footer & honeypot ---------- */
-  footer{padding:56px 0 64px;font-family:var(--mono);font-size:12px;color:var(--dim);text-align:center;line-height:2}
-  footer .disclaimer{
-    max-width:660px;margin:0 auto 28px;color:var(--muted);font-family:var(--sans);font-size:13.5px;
-    border:1px solid var(--border);border-radius:8px;padding:18px 22px;background:var(--panel);
-  }
-  footer .disclaimer b{color:var(--warn)}
-  #honeypot{
-    color:var(--dim);cursor:pointer;font-family:var(--mono);font-size:11px;
-    user-select:none;transition:color .3s;letter-spacing:.5px;
-  }
-  #honeypot:hover{color:var(--danger)}
+    button,
+    input,
+    select {
+      font: inherit;
+    }
 
-  /* ---------- ban overlay ---------- */
-  .ban-overlay{
-    position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;text-align:center;padding:32px;
-    background:rgba(8,11,16,.94);backdrop-filter:blur(8px);
-    opacity:0;pointer-events:none;transition:opacity .35s;
-  }
-  .ban-overlay.show{opacity:1;pointer-events:all}
-  .ban-overlay .ban-code{
-    font-family:var(--mono);font-size:12px;letter-spacing:3px;
-    color:var(--danger);margin-bottom:14px;
-  }
-  .ban-overlay h2{
-    color:var(--danger);letter-spacing:1px;font-family:var(--mono);
-    font-size:clamp(18px,3.5vw,28px);font-weight:500;
-  }
-  .ban-overlay p{color:var(--muted);max-width:520px;margin-top:16px;font-size:14.5px;line-height:1.75}
-  .ban-overlay .timer{
-    font-family:var(--mono);font-size:52px;color:var(--danger);
-    margin:28px 0 10px;letter-spacing:2px;font-weight:400;
-  }
-  .ban-overlay .barban{width:260px;height:2px;background:var(--border);overflow:hidden;margin-top:8px}
-  .ban-overlay .barban i{display:block;height:100%;width:100%;background:var(--danger);transform-origin:left;transition:transform 1s linear}
+    button,
+    select,
+    input {
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      background: var(--panel-2);
+    }
 
-  @media(max-width:640px){
-    .topnav{display:none}
-    .topbar{padding:12px 16px}
-    .wrap{padding:0 18px}
-    section{padding:56px 0}
-  }
-</style>
+    button {
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    code {
+      color: var(--accent);
+      font-family: var(--mono);
+      overflow-wrap: anywhere;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: -100px;
+      left: 16px;
+      z-index: 100;
+      padding: 10px 16px;
+      color: var(--bg);
+      background: var(--accent);
+    }
+
+    .skip-link:focus {
+      top: 12px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+      background: rgba(9, 13, 19, .96);
+    }
+
+    .topbar-inner {
+      max-width: 1320px;
+      margin: auto;
+      padding: 16px 24px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+    }
+
+    .connection[data-state="ok"] .dot {
+      background: var(--success);
+    }
+
+    .connection[data-state="error"] .dot {
+      background: var(--danger);
+    }
+
+    main {
+      max-width: 1320px;
+      margin: auto;
+      padding: 38px 24px 64px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 14px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin-bottom: 14px;
+    }
+
+    .kicker {
+      margin-bottom: 12px;
+      font: 12px var(--mono);
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      max-width: 920px;
+      color: var(--muted);
+    }
+
+    .notice {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      padding: 18px 20px;
+      background: var(--panel);
+    }
+
+    .notice p:last-child {
+      margin-bottom: 0;
+    }
+
+    .auth {
+      margin: 26px 0;
+    }
+
+    .auth-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 12px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 160px;
+    }
+
+    .token-field {
+      flex: 1;
+      max-width: 520px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .help {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 26px 0;
+    }
+
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .stat-value {
+      margin-top: 8px;
+      font: 32px var(--mono);
+    }
+
+    .stat-value.alert {
+      color: var(--warning);
+    }
+
+    .sensor {
+      margin-bottom: 24px;
+    }
+
+    .sensor strong {
+      color: var(--accent);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+
+    .search-field {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .log-panel {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    .log-heading {
+      padding: 15px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .log-heading h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .log-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      max-height: 600px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1000px;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: var(--muted);
+      background: var(--panel-2);
+      font-weight: 500;
+    }
+
+    td {
+      font-family: var(--mono);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:hover {
+      background: rgba(139, 189, 231, .04);
+    }
+
+    tr.kind-alert {
+      background: rgba(227, 194, 107, .06);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      white-space: nowrap;
+      color: var(--accent);
+      font-size: 11px;
+    }
+
+    .badge.alert {
+      color: var(--warning);
+      border-color: #6b5932;
+    }
+
+    .event-details {
+      max-width: 520px;
+      overflow-wrap: anywhere;
+    }
+
+    .secondary {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .empty {
+      padding: 44px 20px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .guide {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .guide article {
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+
+    .guide h2 {
+      font-size: 16px;
+    }
+
+    .guide p {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
+    footer {
+      max-width: 1320px;
+      margin: auto;
+      padding: 0 24px 30px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 800px) {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .guide {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      main {
+        padding: 28px 16px 40px;
+      }
+
+      .topbar-inner {
+        padding: 14px 16px;
+      }
+
+      .stat {
+        padding: 14px;
+      }
+
+      .stat-value {
+        font-size: 27px;
+      }
+
+      .token-field {
+        width: 100%;
+        max-width: none;
+        flex-basis: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
 </head>
+
 <body>
+  <a href="#main" class="skip-link">К содержимому</a>
 
-<!-- ============ BAN OVERLAY ============ -->
-<div class="ban-overlay" id="banOverlay">
-  <div class="ban-code">HTTP 429 · TOO MANY REQUESTS</div>
-  <h2>IP временно заблокирован</h2>
-  <p>Симулятор Fail2ban исчерпал лимит попыток. В реальной системе блокировка обычно длится от 10 минут до 24 часов. Именно поэтому контроль интенсивности запросов — вопрос OPSEC, а не паранойи.</p>
-  <div class="timer" id="banTimer">15</div>
-  <div class="barban"><i id="banBar"></i></div>
-</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="logo">SILENT<span>-RECON</span></div>
 
-<!-- ============ TOP BAR ============ -->
-<header class="topbar">
-  <div class="logo">SILENT<span>-RECON</span></div>
-  <nav class="topnav">
-    <a href="#hero" data-nav>наблюдение</a>
-    <a href="#recon" data-nav>разведка</a>
-    <a href="#defense" data-nav>защита</a>
-    <a href="#opsec" data-nav>opsec</a>
-  </nav>
-  <div class="status-badge" id="statusBadge"><span class="dot"></span>наблюдение активно</div>
-</header>
-
-<main class="wrap">
-
-  <!-- ============ HERO ============ -->
-  <section id="hero">
-    <div class="kicker">Демонстрация OPSEC</div>
-    <h1>Цифровой след<br>при сканировании</h1>
-    <p class="lead">
-      Любой HTTP-запрос передаёт десятки параметров: IP-адрес, User-Agent,
-      разрешение экрана, отпечатки Canvas и WebGL. Это не взлом — это стандартное
-      поведение браузера. Именно по таким отпечаткам и обнаруживаются сканеры:
-      через <b>Fail2ban</b>, <b>CrowdSec</b>, <b>honeypot</b>-системы и IDS.
-    </p>
-
-    <div class="fp-grid" id="fpGrid">
-      <div class="fp-cell"><span class="k">IP-адрес</span><span class="v muted" id="fp-ip">определяем…</span></div>
+      <div
+        class="connection"
+        id="connection"
+        data-state="idle"
+        role="status"
+      >
+        <span class="dot" aria-hidden="true"></span>
+        <span id="connectionText">Не подключено</span>
+      </div>
     </div>
-  </section>
+  </header>
 
-  <!-- ============ LIVE LOG / FAIL2BAN ============ -->
-  <section id="live">
-    <div class="kicker">Пример логирования</div>
-    <h2><span class="num">01</span>Что видит сервер во время работы</h2>
-    <p class="lead">Каждый переход — это запись в <code>access.log</code>. Ниже живой журнал и симулятор Fail2ban: <b>5 запросов за 30 секунд</b> приводят к бану. Кликните по навигации несколько раз, чтобы увидеть механику.</p>
+  <main id="main">
+    <section aria-labelledby="pageTitle">
+      <div class="kicker">HTTP + сетевой сенсор</div>
 
-    <div class="log-layout">
-      <div class="log-window">
-        <div class="log-head">
-          <span class="lights"><i></i><i></i><i></i></span>
-          /var/log/nginx/access.log
+      <h1 id="pageTitle">Что происходит<br>на вашем сервере</h1>
+
+      <p class="lead">
+        Реальные HTTP-события и предупреждения Suricata в одной панели.
+        Записи появляются по мере получения данных сервером.
+        Никаких искусственных запросов и фиктивных блокировок.
+      </p>
+
+      <div class="notice">
+        <p>
+          <strong>Граница наблюдения:</strong>
+          встроенный сервер видит HTTP-запросы к
+          <code>/probe</code> и другим несистемным адресам.
+          Чистое сканирование TCP-портов может не создавать HTTP-запросов.
+          Для его наблюдения подключите Suricata.
+        </p>
+
+        <p class="help">
+          Панель не идентифицирует человека и не доказывает наличие атаки.
+          IP относится к наблюдаемому соединению, а предупреждение —
+          к правилу сенсора или явно обозначенной эвристике.
+        </p>
+      </div>
+    </section>
+
+    <section class="auth" aria-labelledby="authTitle">
+      <h2 id="authTitle">Подключение к журналу</h2>
+
+      <form id="connectForm">
+        <div class="auth-row">
+          <div class="field token-field">
+            <label for="token">Токен доступа к панели</label>
+
+            <input
+              id="token"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              required
+              minlength="24"
+              placeholder="Значение DASHBOARD_TOKEN"
+              aria-describedby="tokenHelp"
+            >
+          </div>
+
+          <button type="submit" id="connectButton">
+            Подключиться
+          </button>
+
+          <button type="button" id="disconnectButton" disabled>
+            Отключиться
+          </button>
         </div>
-        <div class="log-body" id="logBody"></div>
+      </form>
+
+      <p class="help" id="tokenHelp">
+        Токен хранится только в памяти этой вкладки.
+        Для удалённого доступа используйте HTTPS или SSH-туннель.
+      </p>
+    </section>
+
+    <section aria-label="Статистика процесса сервера" class="stats">
+      <div class="stat">
+        <div class="stat-label">HTTP-запросы</div>
+        <div class="stat-value" id="httpCount">—</div>
       </div>
 
-      <div class="fb-panel">
-        <div class="fb-title"><span>fail2ban</span><span class="mode">watch</span></div>
-        <div class="fb-sub">jail: nginx-req-limit</div>
-        <div class="fb-meter"><div class="fb-fill" id="fbFill"></div></div>
-        <div class="fb-stats">
-          <span>попыток: <b id="fbCount">0</b> / <b>5</b></span>
-          <span>окно: 30 с</span>
+      <div class="stat">
+        <div class="stat-label">События сенсора</div>
+        <div class="stat-value" id="networkCount">—</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Предупреждения</div>
+        <div class="stat-value alert" id="alertCount">—</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Записей в памяти сервера</div>
+        <div class="stat-value" id="storedCount">—</div>
+      </div>
+    </section>
+
+    <div class="notice sensor">
+      <strong>Suricata:</strong>
+      <span id="sensorStatus">статус ещё не получен</span>
+
+      <div class="help" id="sensorLast">
+        HTTP-журнал работает независимо от сетевого сенсора.
+      </div>
+    </div>
+
+    <section aria-labelledby="journalTitle">
+      <div class="toolbar">
+        <div class="field">
+          <label for="kindFilter">Тип события</label>
+
+          <select id="kindFilter">
+            <option value="all">Все события</option>
+            <option value="http">HTTP</option>
+            <option value="network">Сетевые</option>
+            <option value="alert">Предупреждения</option>
+          </select>
         </div>
-        <div class="fb-legend">
-          <div><span>maxretry</span> = 5</div>
-          <div><span>findtime</span> = 30 с</div>
-          <div><span>bantime</span> = 15 с (демо)</div>
+
+        <div class="field search-field">
+          <label for="search">Поиск по загруженным событиям</label>
+
+          <input
+            id="search"
+            type="search"
+            placeholder="IP, путь, User-Agent, сигнатура…"
+          >
         </div>
-        <div class="fb-hint">кликайте навигацию, чтобы проверить реакцию</div>
+
+        <div class="actions">
+          <button
+            type="button"
+            id="pauseButton"
+            disabled
+            aria-pressed="false"
+          >
+            Пауза
+          </button>
+
+          <button type="button" id="exportButton">
+            Экспорт JSON
+          </button>
+        </div>
       </div>
-    </div>
-  </section>
 
-  <!-- ============ RECON ============ -->
-  <section id="recon">
-    <div class="kicker">Методы разведки</div>
-    <h2><span class="num">02</span>Как фиксируются действия</h2>
-    <p class="lead">Разведку делят на пассивную — она почти не оставляет следов, и активную — именно на этом этапе срабатывают защитные механизмы.</p>
+      <div class="log-panel">
+        <div class="log-heading">
+          <h2 id="journalTitle">Журнал событий</h2>
 
-    <div class="cards">
-      <div class="card">
-        <span class="tag passive">PASSIVE</span>
-        <h3>OSINT и открытые источники</h3>
-        <p>Поисковики, социальные сети, вакансии, репозитории, утечки. Пакеты к цели не уходят — заметить вас некому.</p>
+          <span class="log-meta" id="logMeta">
+            Ожидание подключения
+          </span>
+        </div>
+
+        <div class="table-wrap" id="tableWrap">
+          <table id="eventTable" hidden>
+            <caption hidden>
+              Полученные события HTTP-сервера и Suricata
+            </caption>
+
+            <thead>
+              <tr>
+                <th scope="col">Время</th>
+                <th scope="col">Источник</th>
+                <th scope="col">Откуда → куда</th>
+                <th scope="col">Событие</th>
+              </tr>
+            </thead>
+
+            <tbody id="eventBody"></tbody>
+          </table>
+
+          <div class="empty" id="emptyState">
+            Подключитесь и отправьте запрос к /probe.
+          </div>
+        </div>
       </div>
-      <div class="card">
-        <span class="tag passive">PASSIVE</span>
-        <h3>DNS и сертификаты</h3>
-        <p>История сертификатов через <code>crt.sh</code>, публичные DNS-записи и поддомены. Карта инфраструктуры без единого запроса к серверу.</p>
-      </div>
-      <div class="card">
-        <span class="tag passive">PASSIVE</span>
-        <h3>Shodan, Censys, ZoomEye</h3>
-        <p>Интернет уже просканирован за вас. Открытые порты, баннеры сервисов, версии — всё в публичных базах.</p>
-      </div>
-      <div class="card">
-        <span class="tag active">ACTIVE</span>
-        <h3>Host Discovery</h3>
-        <p>Проверка, кто жив в сети: ICMP, ARP (в LAN), TCP-пробы на популярные порты. Первый шум в логах.</p>
-      </div>
-      <div class="card">
-        <span class="tag active">ACTIVE</span>
-        <h3>Сканирование портов</h3>
-        <p><code>nmap -sS</code> — SYN-скан, быстрее и тише полного рукопожатия. Но всё равно фиксируется в firewall и IDS.</p>
-      </div>
-      <div class="card">
-        <span class="tag active">ACTIVE</span>
-        <h3>Определение сервисов</h3>
-        <p><code>nmap -sV</code>, баннеры, отпечатки ОС. Каждый запрос — потенциальный триггер для rate-limit и honeypot.</p>
-      </div>
-    </div>
-  </section>
 
-  <!-- ============ DEFENSE ============ -->
-  <section id="defense">
-    <div class="kicker">Методы противодействия</div>
-    <h2><span class="num">03</span>Что стоит на защите помимо Fail2ban</h2>
-    <p class="lead">Fail2ban — только первый эшелон. Современный стек умеет делиться репутацией, обманывать и истощать сканера.</p>
+      <p class="help" id="historyNote">
+        Вкладка хранит до 1000 последних загруженных записей.
+        Сервер хранит до 3000 записей в оперативной памяти.
+        После перезапуска сервера история и счётчики сбрасываются.
+      </p>
+    </section>
 
-    <div class="cards">
-      <div class="card">
-        <span class="tag def">LOG ANALYSIS</span>
-        <h3>Fail2ban</h3>
-        <p>Читает логи, считает сбои (<code>maxretry</code>) за окно (<code>findtime</code>) и банит IP на <code>bantime</code>. Классика, но легко обходится медленным сканом.</p>
-      </div>
-      <div class="card">
-        <span class="tag danger">REPUTATION</span>
-        <h3>CrowdSec</h3>
-        <p>Краудсорсинговая защита. Если IP уже атаковал другие серверы сети — бан произойдёт до первого пакета. Цифровой след идёт впереди вас.</p>
-      </div>
-      <div class="card">
-        <span class="tag def">FIREWALL + LFD</span>
-        <h3>CSF + LFD</h3>
-        <p>Файрвол с демоном защиты в одном решении. Шире, чем Fail2ban, но оригинальный проект завершён в 2025 — проверяйте форки.</p>
-      </div>
-      <div class="card">
-        <span class="tag danger">DECEPTION</span>
-        <h3>Honeypot</h3>
-        <p>Приманка, выглядящая уязвимой, но бесполезной. Любое взаимодействие — почти гарантированный признак атаки, ложных срабатываний минимум.</p>
-      </div>
-      <div class="card">
-        <span class="tag danger">EXHAUSTION</span>
-        <h3>Tarpit (LaBrea)</h3>
-        <p>Не блокирует, а «замораживает» соединение через TCP-трюки (нулевое окно приёма). Сканер зависает и теряет время.</p>
-      </div>
-      <div class="card">
-        <span class="tag def">KERNEL</span>
-        <h3>XDP, eBPF, nftables</h3>
-        <p>Фильтрация на уровне ядра Linux: субмикросекундная реакция, отбрасывание пакетов до нагрузки на систему. Быстрее любого лог-парсера.</p>
-      </div>
-      <div class="card">
-        <span class="tag def">IDS / IPS</span>
-        <h3>Suricata</h3>
-        <p>Анализ трафика по сигнатурам в реальном времени. Замечает подозрительные TCP-флаги и паттерны, даже если в логах приложения пусто.</p>
-      </div>
-    </div>
-  </section>
+    <section class="guide" aria-label="Как читать события">
+      <article>
+        <h2>HTTP — прикладной уровень</h2>
 
-  <!-- ============ OPSEC ============ -->
-  <section id="opsec">
-    <div class="kicker">Этичная скрытность</div>
-    <h2><span class="num">04</span>Как сканировать без лишних проблем</h2>
-    <p class="lead">Скрытность — не обход защиты, а уважение к чужим системам и минимизация собственного следа.</p>
+        <p>
+          Показывает запросы, дошедшие до наблюдаемого обработчика:
+          метод, адрес, статус и User-Agent.
+          Служебные запросы самой панели не учитываются.
+          User-Agent задаётся клиентом и может быть подделан.
+        </p>
+      </article>
 
-    <ul class="opsec-list">
-      <li><span class="n">01</span><div><b>Только с письменного разрешения.</b> Сканирование без согласия владельца незаконно.</div></li>
-      <li><span class="n">02</span><div><b>Slow and low.</b> Растягивайте сканирование во времени: <code>nmap -T2 --scan-delay 500ms</code>. Не превышайте порог <code>findtime</code>.</div></li>
-      <li><span class="n">03</span><div><b>Ротация IP.</b> Разные выходы прокси или VPN не позволят одному адресу накопить счётчик бана.</div></li>
-      <li><span class="n">04</span><div><b>Проверяйте репутацию IP.</b> AbuseIPDB и CrowdSec CTI покажут, числитесь ли вы уже в чёрных списках.</div></li>
-      <li><span class="n">05</span><div><b>Не создавайте ошибок 4xx и 5xx.</b> Перебор несуществующих путей — прямой сигнал сканера. Работайте с реальными эндпоинтами.</div></li>
-      <li><span class="n">06</span><div><b>Читайте заголовки защиты.</b> <code>X-RateLimit-*</code>, <code>Server</code>, <code>Retry-After</code> подскажут, что вас уже посчитали.</div></li>
-      <li><span class="n">07</span><div><b>Уважайте robots.txt.</b> Игнорирование — не «крутость», а лишний флаг в логах.</div></li>
-      <li><span class="n">08</span><div><b>Не трогайте honeypot.</b> Скрытая «админка», странная ссылка, «backup.zip» — приманка. Не открывайте.</div></li>
-    </ul>
-  </section>
+      <article>
+        <h2>Suricata — сетевой уровень</h2>
 
-</main>
+        <p>
+          Показывает новые события из EVE.
+          Потоки могут публиковаться после тайм-аута или завершения,
+          а предупреждения зависят от правил и видимости трафика.
+          Подключённый файл сам по себе не гарантирует обнаружение скана.
+        </p>
+      </article>
 
-<footer>
-  <div class="disclaimer">
-    <b>Дисклеймер.</b> Всё на этой странице — в образовательных целях. Сканирование чужих систем без письменного разрешения владельца нарушает закон. Скрытность нужна не для обхода защиты, а чтобы не мешать работе серверов и не создавать проблем.
-  </div>
-  <div>SILENT-RECON · демонстрация OPSEC · совпадения с реальными IP случайны</div>
-  <div style="margin-top:14px">
-    <span id="honeypot" title="скрытая ссылка-приманка">/admin/backup.zip</span>
-  </div>
-</footer>
+      <article>
+        <h2>Эвристика — не приговор</h2>
 
-<script>
-(function(){
-  'use strict';
+        <p>
+          Десять HTTP-запросов за тридцать секунд создают предупреждение,
+          но не блокировку. Такое поведение бывает у роботов,
+          тестов и обычных приложений. Проверяйте контекст.
+        </p>
+      </article>
+    </section>
+  </main>
 
-  const MAX_RETRY  = 5;
-  const FIND_TIME  = 30000;
-  const BAN_TIME   = 15000;
-  const state = {
-    requests: [],
-    banned: false,
-    ip: null,
-    banInterval: null
-  };
+  <footer>
+    Наблюдайте и тестируйте только собственные системы
+    или инфраструктуру с согласованным разрешением.
+    Журналы могут содержать IP-адреса и другие чувствительные данные.
+  </footer>
 
-  const $ = s => document.querySelector(s);
-  const pad = n => String(n).padStart(2,'0');
-  const ts = () => { const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
-  const hash = str => { let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=(h*0x01000193)>>>0; } return h.toString(16).padStart(8,'0'); };
-  const escapeHtml = s => s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  <script nonce="__NONCE__">
+    (() => {
+      'use strict';
 
-  function collectFingerprint(){
-    const out = {};
-    out['User-Agent']       = navigator.userAgent;
-    out['Платформа']        = navigator.platform || '—';
-    out['Языки']            = (navigator.languages||[navigator.language]).join(', ');
-    out['Экран']            = `${screen.width}×${screen.height} @ ${screen.colorDepth}bit`;
-    out['Окно']             = `${innerWidth}×${innerHeight}`;
-    out['Часовой пояс']     = Intl.DateTimeFormat().resolvedOptions().timeZone || '—';
-    out['Ядер CPU']         = navigator.hardwareConcurrency || '—';
-    out['Память (ГБ)']      = navigator.deviceMemory || '—';
-    out['Тач-поинты']       = navigator.maxTouchPoints || 0;
-    out['DNT']              = navigator.doNotTrack || '—';
-    out['Куки включены']    = navigator.cookieEnabled ? 'да' : 'нет';
+      const $ = (selector) => document.querySelector(selector);
 
-    try{
-      const c = document.createElement('canvas');
-      const ctx = c.getContext('2d');
-      ctx.textBaseline='top'; ctx.font='15px Arial';
-      ctx.fillStyle='#f60'; ctx.fillText('SILENT-RECON-FP', 2, 2);
-      ctx.fillStyle='rgba(123,167,201,.6)'; ctx.fillRect(60,20,80,20);
-      out['Canvas-отпечаток'] = '0x' + hash(c.toDataURL());
-    }catch(e){ out['Canvas-отпечаток'] = '—'; }
+      const MAX_LOCAL_EVENTS = 1000;
+      const POLL_DELAY = 1500;
 
-    try{
-      const gl = document.createElement('canvas').getContext('webgl');
-      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-      out['GPU'] = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '—';
-    }catch(e){ out['GPU'] = '—'; }
+      const state = {
+        token: '',
+        cursor: 0,
+        events: [],
+        running: false,
+        paused: false,
+        timer: null,
+        controller: null,
+        generation: 0,
+        serverStartedAt: null,
+        historyLost: false
+      };
 
-    return out;
-  }
+      const elements = {
+        form: $('#connectForm'),
+        token: $('#token'),
+        connect: $('#connectButton'),
+        disconnect: $('#disconnectButton'),
+        pause: $('#pauseButton'),
+        export: $('#exportButton'),
+        connection: $('#connection'),
+        connectionText: $('#connectionText'),
+        kind: $('#kindFilter'),
+        search: $('#search'),
+        body: $('#eventBody'),
+        table: $('#eventTable'),
+        wrap: $('#tableWrap'),
+        empty: $('#emptyState'),
+        meta: $('#logMeta')
+      };
 
-  function renderFingerprint(){
-    const grid = $('#fpGrid');
-    const ipCell = document.createElement('div');
-    ipCell.className='fp-cell';
-    ipCell.innerHTML = '<span class="k">IP-адрес</span><span class="v muted" id="fp-ip">определяем…</span>';
-    grid.innerHTML='';
-    grid.appendChild(ipCell);
-
-    const fp = collectFingerprint();
-    for(const k in fp){
-      const d = document.createElement('div');
-      d.className='fp-cell';
-      d.innerHTML = `<span class="k">${k}</span><span class="v">${escapeHtml(String(fp[k]))}</span>`;
-      grid.appendChild(d);
-    }
-  }
-
-  async function loadIP(){
-    const el = () => $('#fp-ip');
-    try{
-      const r = await fetch('https://api.ipify.org?format=json', {cache:'no-store'});
-      if(!r.ok) throw 0;
-      const j = await r.json();
-      state.ip = j.ip;
-      if(el()){ el().textContent = j.ip; el().classList.remove('muted'); }
-    }catch(e){
-      state.ip = '127.0.0.1';
-      if(el()){ el().textContent = 'недоступно (CORS или сеть)'; }
-    }
-  }
-
-  function renderLog(){
-    const body = $('#logBody');
-    body.innerHTML = '';
-    const shown = state.requests.slice(-60);
-    for(const r of shown){
-      const line = document.createElement('div');
-      line.className = 'log-line' + (r.note==='honeypot'?' honeypot':'');
-      const cls = r.status>=400 ? 'bad' : (r.note ? 'warn' : '');
-      line.innerHTML =
-        `<span class="t">[${r.time}]</span>` +
-        `<span class="ip">${escapeHtml(r.ip)}</span>` +
-        `<span class="path">${escapeHtml(r.method)} ${escapeHtml(r.path)}</span>` +
-        `<span class="st ${cls}">${r.status} ${escapeHtml(r.msg)}</span>`;
-      body.appendChild(line);
-    }
-    body.scrollTop = body.scrollHeight;
-  }
-
-  function logRequest(path, opts={}){
-    if(state.banned) return;
-    const now = Date.now();
-    state.requests.push({
-      time: ts(),
-      ip: state.ip || '127.0.0.1',
-      method: opts.method || 'GET',
-      path,
-      status: opts.status || 200,
-      msg: opts.msg || 'OK',
-      note: opts.note || '',
-      at: now
-    });
-    renderLog();
-    updateCounter();
-  }
-
-  function recentCount(){
-    const now = Date.now();
-    return state.requests.filter(r => now - r.at < FIND_TIME).length;
-  }
-
-  function updateCounter(){
-    const total = recentCount();
-    const shown = Math.min(total, MAX_RETRY);
-    $('#fbCount').textContent = total;
-    const fill = $('#fbFill');
-    const ratio = shown / MAX_RETRY;
-    fill.style.width = Math.min(100, ratio*100) + '%';
-    if(ratio < 0.6)      fill.style.background = 'var(--accent)';
-    else if(ratio < 1)   fill.style.background = 'var(--warn)';
-    else                 fill.style.background = 'var(--danger)';
-    if(total >= MAX_RETRY && !state.banned) ban();
-  }
-
-  function ban(){
-    if(state.banned) return;
-    state.banned = true;
-    const overlay = $('#banOverlay');
-    const badge = $('#statusBadge');
-    overlay.classList.add('show');
-    badge.innerHTML = '<span class="dot"></span>заблокирован';
-    badge.classList.add('banned');
-
-    let left = Math.ceil(BAN_TIME/1000);
-    const totalLeft = left;
-    $('#banTimer').textContent = left;
-    $('#banBar').style.transform = 'scaleX(1)';
-
-    clearInterval(state.banInterval);
-    state.banInterval = setInterval(()=>{
-      left--;
-      $('#banTimer').textContent = Math.max(left,0);
-      $('#banBar').style.transform = `scaleX(${Math.max(left,0)/totalLeft})`;
-      if(left <= 0){
-        clearInterval(state.banInterval);
-        unban();
+      function setConnection(text, status = 'idle') {
+        elements.connectionText.textContent = text;
+        elements.connection.dataset.state = status;
       }
-    }, 1000);
-  }
 
-  function unban(){
-    state.banned = false;
-    state.requests = [];
-    $('#banOverlay').classList.remove('show');
-    const badge = $('#statusBadge');
-    badge.innerHTML = '<span class="dot"></span>наблюдение активно';
-    badge.classList.remove('banned');
-    updateCounter();
-    renderLog();
-  }
+      function updateControls() {
+        elements.connect.disabled = state.running;
+        elements.disconnect.disabled = !state.running;
+        elements.pause.disabled = !state.running;
 
-  function bind(){
-    document.querySelectorAll('[data-nav]').forEach(a=>{
-      a.addEventListener('click', e=>{
-        e.preventDefault();
-        const id = a.getAttribute('href');
-        logRequest(id, {status:200, msg:'OK', note:'nav'});
-        const target = document.querySelector(id);
-        if(target) target.scrollIntoView({behavior:'smooth'});
+        elements.pause.textContent = state.paused
+          ? 'Продолжить'
+          : 'Пауза';
+
+        elements.pause.setAttribute(
+          'aria-pressed',
+          String(state.paused)
+        );
+      }
+
+      function formatTime(value) {
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+          return String(value || '—');
+        }
+
+        return date.toLocaleString('ru-RU', {
+          hour12: false
+        });
+      }
+
+      function endpoint(ip, port) {
+        if (!ip) {
+          return '—';
+        }
+
+        const address = String(ip);
+        const formatted = address.includes(':')
+          ? `[${address}]`
+          : address;
+
+        return port === undefined || port === null
+          ? formatted
+          : `${formatted}:${port}`;
+      }
+
+      function appendText(parent, tag, text, className = '') {
+        const element = document.createElement(tag);
+
+        element.textContent = text;
+
+        if (className) {
+          element.className = className;
+        }
+
+        parent.appendChild(element);
+
+        return element;
+      }
+
+      function eventMatches(event) {
+        const kind = elements.kind.value;
+
+        if (kind !== 'all' && event.kind !== kind) {
+          return false;
+        }
+
+        const query = elements.search.value.trim().toLowerCase();
+
+        if (!query) {
+          return true;
+        }
+
+        return JSON.stringify(event).toLowerCase().includes(query);
+      }
+
+      function renderEvents() {
+        const wrap = elements.wrap;
+
+        const nearBottom = (
+          wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight
+        ) < 80;
+
+        const previousScroll = wrap.scrollTop;
+
+        const events = state.events.filter(eventMatches);
+        const fragment = document.createDocumentFragment();
+
+        for (const event of events) {
+          const row = document.createElement('tr');
+
+          if (event.kind === 'alert') {
+            row.className = 'kind-alert';
+          }
+
+          const timeCell = document.createElement('td');
+          timeCell.textContent = formatTime(event.time);
+          row.appendChild(timeCell);
+
+          const sourceCell = document.createElement('td');
+
+          appendText(
+            sourceCell,
+            'span',
+            event.source || '—',
+            event.kind === 'alert' ? 'badge alert' : 'badge'
+          );
+
+          row.appendChild(sourceCell);
+
+          const addressCell = document.createElement('td');
+
+          appendText(
+            addressCell,
+            'div',
+            endpoint(event.src_ip, event.src_port)
+          );
+
+          if (event.dest_ip) {
+            appendText(
+              addressCell,
+              'div',
+              `→ ${endpoint(event.dest_ip, event.dest_port)}`,
+              'secondary'
+            );
+          }
+
+          row.appendChild(addressCell);
+
+          const detailsCell = document.createElement('td');
+          detailsCell.className = 'event-details';
+
+          let mainText = event.message || 'Событие';
+
+          if (event.path) {
+            mainText = [
+              event.method || '',
+              event.path,
+              event.status ?? ''
+            ].filter((part) => part !== '').join(' ');
+          }
+
+          appendText(detailsCell, 'div', mainText);
+
+          if (event.user_agent) {
+            appendText(
+              detailsCell,
+              'div',
+              `UA: ${event.user_agent}`,
+              'secondary'
+            );
+          }
+
+          if (event.category) {
+            appendText(
+              detailsCell,
+              'div',
+              `Категория: ${event.category}`,
+              'secondary'
+            );
+          }
+
+          if (event.signature_id) {
+            appendText(
+              detailsCell,
+              'div',
+              `SID: ${event.signature_id}`,
+              'secondary'
+            );
+          }
+
+          if (event.observed_at) {
+            appendText(
+              detailsCell,
+              'div',
+              `Время сенсора: ${formatTime(event.observed_at)}`,
+              'secondary'
+            );
+          }
+
+          row.appendChild(detailsCell);
+          fragment.appendChild(row);
+        }
+
+        elements.body.replaceChildren(fragment);
+
+        elements.table.hidden = events.length === 0;
+        elements.empty.hidden = events.length !== 0;
+
+        elements.empty.textContent = state.running
+          ? 'Подходящих событий пока нет. Можно отправить запрос к /probe.'
+          : 'Подключитесь к журналу, чтобы получить события.';
+
+        const lost = state.historyLost
+          ? ' · часть истории недоступна'
+          : '';
+
+        elements.meta.textContent = (
+          `Показано: ${events.length} · ` +
+          `загружено: ${state.events.length}${lost}`
+        );
+
+        if (nearBottom) {
+          wrap.scrollTop = wrap.scrollHeight;
+        } else {
+          wrap.scrollTop = previousScroll;
+        }
+      }
+
+      function renderStatus(data) {
+        $('#httpCount').textContent = data.stats.http;
+        $('#networkCount').textContent = data.stats.network;
+        $('#alertCount').textContent = data.stats.alerts;
+        $('#storedCount').textContent = data.stats.stored;
+
+        const sensor = data.sensor;
+
+        $('#sensorStatus').textContent = sensor.configured
+          ? `${sensor.connected ? 'файл подключён' : 'нет связи с файлом'} — ${sensor.message}`
+          : 'не настроена; доступны только события HTTP-сервера';
+
+        $('#sensorLast').textContent = sensor.last_event_at
+          ? `Последняя прочитанная запись EVE: ${formatTime(sensor.last_event_at)}`
+          : 'Новые записи EVE ещё не получены. Старый файл при первом подключении не импортируется.';
+      }
+
+      function schedulePoll(delay, generation) {
+        clearTimeout(state.timer);
+
+        if (!state.running || state.paused) {
+          return;
+        }
+
+        state.timer = setTimeout(
+          () => poll(generation),
+          delay
+        );
+      }
+
+      async function poll(generation) {
+        if (
+          !state.running ||
+          state.paused ||
+          generation !== state.generation
+        ) {
+          return;
+        }
+
+        const controller = new AbortController();
+        state.controller = controller;
+
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        let nextDelay = POLL_DELAY;
+
+        try {
+          const response = await fetch(
+            `/api/events?since=${encodeURIComponent(state.cursor)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${state.token}`
+              },
+              cache: 'no-store',
+              signal: controller.signal
+            }
+          );
+
+          if (generation !== state.generation) {
+            return;
+          }
+
+          if (response.status === 401) {
+            disconnect('Неверный токен доступа', 'error');
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          if (generation !== state.generation) {
+            return;
+          }
+
+          if (
+            state.serverStartedAt &&
+            state.serverStartedAt !== data.started_at
+          ) {
+            state.events = [];
+            state.cursor = 0;
+            state.serverStartedAt = data.started_at;
+            state.historyLost = false;
+
+            setConnection('Сервер перезапущен. Загрузка журнала…');
+
+            nextDelay = 0;
+            return;
+          }
+
+          state.serverStartedAt = data.started_at;
+
+          state.historyLost ||= data.truncated;
+
+          const existingIds = new Set(
+            state.events.map((event) => event.id)
+          );
+
+          const newEvents = data.events.filter(
+            (event) => !existingIds.has(event.id)
+          );
+
+          state.events.push(...newEvents);
+
+          if (state.events.length > MAX_LOCAL_EVENTS) {
+            state.events.splice(
+              0,
+              state.events.length - MAX_LOCAL_EVENTS
+            );
+          }
+
+          state.cursor = data.cursor;
+
+          renderStatus(data);
+
+          if (newEvents.length || data.truncated) {
+            renderEvents();
+          }
+
+          setConnection(
+            state.paused
+              ? 'Обновление приостановлено'
+              : `Подключено · ${formatTime(data.server_time)}`,
+            state.paused ? 'idle' : 'ok'
+          );
+
+          // Если накопилось больше одной страницы событий,
+          // следующую порцию запрашиваем почти сразу.
+          if (data.cursor < data.latest) {
+            nextDelay = 50;
+          }
+
+        } catch (error) {
+          if (
+            generation !== state.generation ||
+            !state.running
+          ) {
+            return;
+          }
+
+          if (!state.paused) {
+            setConnection(
+              error.name === 'AbortError'
+                ? 'Тайм-аут. Повторное подключение…'
+                : 'Сервер недоступен. Повторное подключение…',
+              'error'
+            );
+          }
+
+          nextDelay = 3000;
+
+        } finally {
+          clearTimeout(timeout);
+
+          if (state.controller === controller) {
+            state.controller = null;
+          }
+
+          if (generation === state.generation) {
+            schedulePoll(nextDelay, generation);
+          }
+        }
+      }
+
+      function disconnect(
+        message = 'Отключено',
+        status = 'idle'
+      ) {
+        state.running = false;
+        state.paused = false;
+        state.token = '';
+        state.generation += 1;
+
+        clearTimeout(state.timer);
+        state.controller?.abort();
+        state.controller = null;
+
+        setConnection(message, status);
+        updateControls();
+      }
+
+      elements.form.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        const token = elements.token.value.trim();
+
+        if (token.length < 24) {
+          setConnection('Токен слишком короткий', 'error');
+          return;
+        }
+
+        disconnect();
+
+        state.token = token;
+        state.cursor = 0;
+        state.events = [];
+        state.historyLost = false;
+        state.serverStartedAt = null;
+        state.running = true;
+        state.paused = false;
+
+        elements.token.value = '';
+
+        updateControls();
+        renderEvents();
+
+        setConnection('Подключение…');
+
+        void poll(state.generation);
       });
-    });
 
-    const hp = $('#honeypot');
-    hp.addEventListener('click', ()=>{
-      if(state.banned) return;
-      for(let i=0;i<3;i++){
-        logRequest('/admin/backup.zip', {status:404, msg:'Not Found', note:'honeypot'});
-      }
-      hp.textContent = '/admin/backup.zip — 404 (приманка сработала)';
-    });
+      elements.disconnect.addEventListener('click', () => {
+        disconnect();
+      });
 
-    setInterval(()=>{ if(!state.banned) updateCounter(); }, 1000);
-  }
+      elements.pause.addEventListener('click', () => {
+        state.paused = !state.paused;
 
-  document.addEventListener('DOMContentLoaded', async ()=>{
-    renderFingerprint();
-    await loadIP();
-    bind();
-    setTimeout(()=>{
-      logRequest('/', {status:200, msg:'OK', note:'page-load'});
-    }, 250);
-  });
+        updateControls();
 
-})();
-</script>
+        if (state.paused) {
+          clearTimeout(state.timer);
+
+          setConnection('Обновление приостановлено');
+
+        } else {
+          setConnection('Возобновление…');
+
+          if (!state.controller) {
+            void poll(state.generation);
+          }
+        }
+      });
+
+      elements.kind.addEventListener('change', renderEvents);
+      elements.search.addEventListener('input', renderEvents);
+
+      elements.export.addEventListener('click', () => {
+        const payload = {
+          exported_at: new Date().toISOString(),
+          note: 'Только события, загруженные в текущую вкладку',
+          events: state.events
+        };
+
+        const blob = new Blob(
+          [JSON.stringify(payload, null, 2)],
+          {type: 'application/json'}
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = `silent-recon-${Date.now()}.json`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+
+      window.addEventListener('pagehide', () => {
+        disconnect();
+      });
+
+      updateControls();
+    })();
+  </script>
 </body>
 </html>
